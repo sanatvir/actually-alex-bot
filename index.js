@@ -21,7 +21,7 @@ let stuckTicks = 0;
 
 function createBot() {
     bot = mineflayer.createBot(botArgs);
-    bot.physics.yield = true; // This reduces the calculation load on the server
+    bot.physics.yield = true; // Essential for low-lag packets
 
     const moveLogic = () => {
         if (!bot || !bot.entity || isBypassing || isEscaping) {
@@ -29,6 +29,7 @@ function createBot() {
             return;
         }
 
+        // --- STUCK DETECTION ---
         if (lastPosition && bot.entity.position.distanceTo(lastPosition) < 0.15) {
             stuckTicks++;
         } else {
@@ -51,22 +52,27 @@ function createBot() {
             bot.setControlState('jump', false);
         }
 
+        // --- MOVEMENT (Reduced Sprinting) ---
         const actions = ['forward', 'left', 'right'];
         bot.setControlState(actions[Math.floor(Math.random() * 3)], true);
-        bot.setControlState('sprint', Math.random() > 0.1);
+        bot.setControlState('sprint', Math.random() > 0.5); // 50% chance to sprint (safer)
 
-        const nearby = bot.nearestEntity((e) => e.type === 'player');
-        if (nearby && bot.entity.position.distanceTo(nearby.position) < 8) {
-            const offset = new vec3((Math.random() - 0.5), nearby.height * 0.8, (Math.random() - 0.5));
-            bot.lookAt(nearby.position.plus(offset));
-        } else {
-            bot.look(yaw + (Math.random() * 0.4 - 0.2), (Math.random() * 0.2 - 0.1), false);
+        // --- LOOK LOGIC (Reduced frequency to save packets) ---
+        if (Math.random() < 0.3) { // Only change look direction 30% of the time
+            const nearby = bot.nearestEntity((e) => e.type === 'player');
+            if (nearby && bot.entity.position.distanceTo(nearby.position) < 8) {
+                const offset = new vec3((Math.random() - 0.5), nearby.height * 0.8, (Math.random() - 0.5));
+                bot.lookAt(nearby.position.plus(offset));
+            } else {
+                bot.look(yaw + (Math.random() * 0.4 - 0.2), (Math.random() * 0.2 - 0.1), false);
+            }
         }
 
         if (Math.random() < 0.1) bot.swingArm('right'); 
         if (Math.random() < 0.05) bot.setQuickBarSlot(Math.floor(Math.random() * 9));
 
-        setTimeout(moveLogic, Math.random() * 1200 + 800);
+        // Wait between 1 and 2.5 seconds (Very safe for Aternos)
+        setTimeout(moveLogic, Math.random() * 1500 + 1000);
     };
 
     bot.on('end', () => {
@@ -77,6 +83,10 @@ function createBot() {
 
     bot.on('spawn', () => {
         console.log('🐐 ALEX GOAT: Online and ready.');
+        
+        // Auto-Godmode Command
+        bot.chat('/effect give @s minecraft:resistance infinite 255 true');
+
         const scheduleBypass = () => {
             setTimeout(() => {
                 isBypassing = true;
