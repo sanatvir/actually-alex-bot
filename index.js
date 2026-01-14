@@ -21,6 +21,7 @@ let stuckTicks = 0;
 
 function createBot() {
     bot = mineflayer.createBot(botArgs);
+    bot.physics.yield = true; // This reduces the calculation load on the server
 
     const moveLogic = () => {
         if (!bot || !bot.entity || isBypassing || isEscaping) {
