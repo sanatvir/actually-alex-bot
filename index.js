@@ -4,7 +4,7 @@ const vec3 = require('vec3');
 
 const app = express();
 const PORT = process.env.PORT || 3001; 
-app.get('/', (req, res) => res.send('Actually_Alex: Stealth Engine Online.'));
+app.get('/', (req, res) => res.send('Actually_Alex: Elite Stealth Engine Online.'));
 app.listen(PORT, '0.0.0.0', () => console.log(`Alex Uptime server live on port ${PORT}`));
 
 const botArgs = {
@@ -16,107 +16,94 @@ const botArgs = {
 let bot;
 let isBypassing = false;
 let isEscaping = false;
-let lastPosition = null;
-let stuckTicks = 0;
+let isLongPausing = false;
 
 function createBot() {
     bot = mineflayer.createBot(botArgs);
-    bot.physics.yield = true; // Essential for low-lag packets
+
+    // 1. PERFORMANCE: Prevent packet-limit kicks
+    bot.physics.yield = true; 
+    bot.physics.maxUpdateDelay = 500; 
+
+    // --- FEATURE: THE LONG PAUSE LOGIC ---
+    const triggerLongPause = () => {
+        // Wait between 12 and 18 minutes to trigger a "Ghost Pause"
+        const nextPauseDelay = (Math.random() * (18 - 12) + 12) * 60 * 1000;
+        
+        setTimeout(() => {
+            isLongPausing = true;
+            bot.clearControlStates(); 
+            console.log("Alex starting a long silent pause (4-8s)...");
+
+            // Duration: 4 to 8 seconds
+            const pauseDuration = Math.random() * (8000 - 4000) + 4000;
+            
+            setTimeout(() => {
+                isLongPausing = false;
+                console.log("Alex pause finished. Resuming.");
+                moveLogic(); 
+                triggerLongPause(); 
+            }, pauseDuration);
+
+        }, nextPauseDelay);
+    };
 
     const moveLogic = () => {
-        if (!bot || !bot.entity || isBypassing || isEscaping) {
-            setTimeout(moveLogic, 500);
+        if (!bot || !bot.entity || isBypassing || isEscaping || isLongPausing) {
+            if (!isLongPausing) setTimeout(moveLogic, 1000);
             return;
         }
 
-        // --- STUCK DETECTION ---
-        if (lastPosition && bot.entity.position.distanceTo(lastPosition) < 0.15) {
-            stuckTicks++;
-        } else {
-            stuckTicks = 0;
-        }
-        lastPosition = bot.entity.position.clone();
+        // --- CORE STEALTH MOVEMENTS ---
+        // Random Sneak (15%)
+        bot.setControlState('sneak', Math.random() < 0.15);
 
-        const yaw = bot.entity.yaw;
-        const moveDir = new vec3(-Math.sin(yaw), 0, -Math.cos(yaw));
-        const blockInFront = bot.blockAt(bot.entity.position.plus(moveDir.scaled(1)));
+        // Random Jump (10%)
+        if (Math.random() < 0.1) {
+            bot.setControlState('jump', true);
+            setTimeout(() => bot.setControlState('jump', false), 300);
+        }
+
+        // Random Sprint (40%)
+        bot.setControlState('sprint', Math.random() > 0.6);
+
+        // Move Direction
+        const actions = ['forward', 'left', 'right', 'back'];
+        bot.clearControlStates(); 
+        bot.setControlState(actions[Math.floor(Math.random() * actions.length)], true);
         
-        if (blockInFront && blockInFront.boundingBox !== 'empty') {
-            if (stuckTicks > 3) {
-                bot.look(yaw + (Math.random() > 0.5 ? 1.5 : -1.5), 0);
-                stuckTicks = 0;
-            } else {
-                bot.setControlState('jump', true);
-            }
-        } else {
-            bot.setControlState('jump', false);
-        }
-
-        // --- MOVEMENT (Reduced Sprinting) ---
-        const actions = ['forward', 'left', 'right'];
-        bot.setControlState(actions[Math.floor(Math.random() * 3)], true);
-        bot.setControlState('sprint', Math.random() > 0.5); // 50% chance to sprint (safer)
-
-        // --- LOOK LOGIC (Reduced frequency to save packets) ---
-        if (Math.random() < 0.3) { // Only change look direction 30% of the time
+        // Human Gaze (20%)
+        if (Math.random() < 0.2) {
             const nearby = bot.nearestEntity((e) => e.type === 'player');
-            if (nearby && bot.entity.position.distanceTo(nearby.position) < 8) {
-                const offset = new vec3((Math.random() - 0.5), nearby.height * 0.8, (Math.random() - 0.5));
-                bot.lookAt(nearby.position.plus(offset));
+            if (nearby && bot.entity.position.distanceTo(nearby.position) < 10) {
+                bot.lookAt(nearby.position.plus(new vec3(0, 1.6, 0)));
             } else {
-                bot.look(yaw + (Math.random() * 0.4 - 0.2), (Math.random() * 0.2 - 0.1), false);
+                bot.look(bot.entity.yaw + (Math.random() - 0.5), (Math.random() - 0.5));
             }
         }
 
-        if (Math.random() < 0.1) bot.swingArm('right'); 
-        if (Math.random() < 0.05) bot.setQuickBarSlot(Math.floor(Math.random() * 9));
+        if (Math.random() < 0.1) bot.swingArm('right');
 
-        // Wait between 1 and 2.5 seconds (Very safe for Aternos)
-        setTimeout(moveLogic, Math.random() * 1500 + 1000);
+        // Loop interval (2.5 - 4.5 seconds)
+        setTimeout(moveLogic, Math.random() * 2000 + 2500);
     };
 
-    bot.on('end', () => {
-        const delay = Math.floor(Math.random() * 10000) + 5000; 
-        console.log(`Alex disconnected. Rejoining in ${delay / 1000}s...`);
-        setTimeout(createBot, delay);
-    });
-
     bot.on('spawn', () => {
-        console.log('🐐 ALEX GOAT: Online and ready.');
-        
-        // Auto-Godmode Command
-        bot.chat('/effect give @s minecraft:resistance infinite 255 true');
-
-        const scheduleBypass = () => {
-            setTimeout(() => {
-                isBypassing = true;
-                bot.clearControlStates();
-                setTimeout(() => {
-                    isBypassing = false;
-                    moveLogic();
-                    scheduleBypass();
-                }, Math.random() * 5000 + 5000);
-            }, 720000); 
-        };
+        console.log('🐐 ALEX ELITE: Operational.');
         moveLogic();
-        scheduleBypass();
+        triggerLongPause(); 
     });
 
-    bot.on('health', () => {
-        if (bot.health < 19 && !isEscaping) {
-            isEscaping = true;
-            bot.setControlState('back', true);
-            bot.setControlState('sprint', true);
-            bot.setControlState('jump', true);
-            setTimeout(() => { 
-                isEscaping = false; 
-                bot.clearControlStates();
-                moveLogic(); 
-            }, 5000);
-        }
+    bot.on('death', () => bot.respawn());
+
+    // --- FEATURE: RANDOM REJOIN (5-10 SECS) ---
+    bot.on('end', () => {
+        const rejoinDelay = Math.random() * (10000 - 5000) + 5000;
+        console.log(`Connection lost. Rejoining randomly in ${rejoinDelay/1000}s...`);
+        setTimeout(createBot, rejoinDelay);
     });
 
-    bot.on('error', (err) => console.log('Alex Engine Error:', err.message));
+    bot.on('error', (err) => console.log('Engine Error:', err.message));
 }
 
 createBot();
