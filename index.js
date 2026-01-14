@@ -65,7 +65,7 @@ function createBot() {
         if (Math.random() < 0.1) bot.swingArm('right'); 
         if (Math.random() < 0.05) bot.setQuickBarSlot(Math.floor(Math.random() * 9));
 
-        setTimeout(moveLogic, Math.random() * 800 + 400); 
+        setTimeout(moveLogic, Math.random() * 1200 + 800);
     };
 
     bot.on('end', () => {
